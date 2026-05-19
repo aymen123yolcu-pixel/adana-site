@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Adana İstihbarat Teşkilatı</title>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+
+<style>
+body{
+margin:0;
+font-family:Arial;
+background:#050505;
+color:white;
+overflow-x:hidden;
+}
+
+.rain{
+position:fixed;
+top:0;left:0;
+width:100%;height:100%;
+pointer-events:none;
+z-index:0;
+}
+
+.drop{
+position:absolute;
+top:-20%;
+width:1px;
+height:120px;
+background:linear-gradient(to bottom, transparent, rgba(0,255,120,0.35), transparent);
+animation:fall linear infinite;
+}
+
+@keyframes fall{
+0%{transform:translateY(-200px);}
+100%{transform:translateY(120vh);}
+}
+
+.header{
+position:relative;
+z-index:2;
+text-align:center;
+padding:25px 10px;
+border-bottom:1px solid #222;
+}
+
+.header h1{
+margin:0;
+font-size:22px;
+letter-spacing:2px;
+color:#e50914;
+}
+
+.container{
+position:relative;
+z-index:2;
+max-width:900px;
+margin:20px auto;
+padding:20px;
+}
+
+input,textarea{
+width:100%;
+margin-top:10px;
+padding:12px;
+border-radius:10px;
+border:1px solid #333;
+background:#111;
+color:white;
+resize:none;
+}
+
+button{
+margin-top:10px;
+padding:10px;
+width:100%;
+background:#e50914;
+border:none;
+color:white;
+border-radius:10px;
+cursor:pointer;
+}
+
+button:disabled{background:#444;}
+
+.card{
+background:#111;
+padding:12px;
+margin-top:10px;
+border-radius:10px;
+border:1px solid #222;
+}
+
+#adminPanel{
+display:none;
+margin-top:25px;
+}
+
+.panelTitle{
+font-size:20px;
+margin-bottom:10px;
+color:#e50914;
+letter-spacing:2px;
+}
+
+.row{display:flex;gap:10px;}
+.smallBtn{width:100%;padding:8px;font-size:12px;background:#333;}
+.accept{background:green;}
+.reject{background:orange;}
+.delete{background:red;}
+.filterBar{display:flex;gap:10px;margin-top:10px;}
+.filterBar button{flex:1;}
+
+.loginBox{margin-top:20px;}
+
+#loginModal{
+display:none;
+position:fixed;
+top:0;left:0;
+width:100%;height:100%;
+background:rgba(0,0,0,0.85);
+z-index:10;
+align-items:center;
+justify-content:center;
+}
+
+.loginCard{
+background:#111;
+padding:20px;
+border-radius:12px;
+width:300px;
+border:1px solid #333;
+}
+
+.footer{
+position:relative;
+z-index:2;
+text-align:center;
+padding:20px;
+font-size:12px;
+color:#777;
+border-top:1px solid #222;
+margin-top:40px;
+}
+
+.sideText{
+position:fixed;
+top:50%;
+transform:translateY(-50%);
+writing-mode:vertical-rl;
+font-size:14px;
+letter-spacing:4px;
+color:rgba(255,255,255,0.08);
+z-index:0;
+user-select:none;
+}
+.left{left:10px;}
+.right{right:10px;}
+
+.toast{
+position:fixed;
+top:20px;
+right:20px;
+background:#0f0f0f;
+border:1px solid #333;
+color:#0f0;
+padding:12px 16px;
+border-radius:10px;
+box-shadow:0 0 15px rgba(0,255,0,0.2);
+z-index:999;
+animation:fadeIn 0.4s ease;
+}
+
+@keyframes fadeIn{
+from{opacity:0;transform:translateY(-10px);}
+to{opacity:1;transform:translateY(0);}
+}
+</style>
+</head>
+<body>
+
+<div class="rain" id="rain"></div>
+
+<div class="sideText left">MİLLİ İSTİHBARAT TEŞKİLATI</div>
+<div class="sideText right">MİLLİ İSTİHBARAT TEŞKİLATI</div>
+
+<div class="header">
+<h1>ADANA İSTİHBARAT TEŞKİLATI</h1>
+</div>
+
+<div class="container">
+
+<div class="loginBox">
+<button id="loginBtn" onclick="openLogin()">🔐 Admin Giriş</button>
+</div>
+
+<input id="realName" placeholder="Gerçek ismin ve soyismin">
+<input id="discordName" placeholder="Discord adın">
+<textarea id="about" placeholder="Bize kendinden bahset" style="resize:none;"></textarea>
+<button onclick="gonder()">Başvuru Gönder</button>
+
+<div id="adminPanel">
+<div class="panelTitle">📁 BAŞVURULAR</div>
+
+<div class="filterBar">
+<button onclick="filtre('beklemede')">Bekleyen</button>
+<button onclick="filtre('kabul')">Kabul</button>
+<button onclick="filtre('red')">Red</button>
+</div>
+
+<div id="liste"></div>
+</div>
+
+</div>
+
+<div id="loginModal">
+<div class="loginCard">
+<h3>Admin Giriş</h3>
+<input id="email" placeholder="Email">
+<input id="password" type="password" placeholder="Şifre">
+<button onclick="login()">Giriş Yap</button>
+<button onclick="closeLogin()" style="background:#333">Kapat</button>
+</div>
+</div>
+
+<div class="footer">
+MİT tüm hakları gizlidir • Morfinbeynimde tarafından Adana Roleplay için hazırlanmıştır
+</div>
+
+<script>
+const firebaseConfig={
+apiKey:"AIzaSyDPMZvWz7YjMJNkRNegqAHiVB4idSWf_rc",
+authDomain:"adana-roleplay-mit.firebaseapp.com",
+projectId:"adana-roleplay-mit",
+storageBucket:"adana-roleplay-mit.appspot.com",
+messagingSenderId:"137415719616",
+appId:"1:137415719616:web:682a82761790e622d28b25"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db=firebase.firestore();
+const auth=firebase.auth();
+
+let currentFilter="beklemede";
+let isLoggedIn=false;
+let loginCooldown=false;
+
+function showToast(msg){
+const t=document.createElement('div');
+t.className='toast';
+t.innerText=msg;
+document.body.appendChild(t);
+setTimeout(()=>t.remove(),2500);
+}
+
+function openLogin(){
+document.getElementById('loginModal').style.display='flex';
+}
+
+function closeLogin(){
+document.getElementById('loginModal').style.display='none';
+}
+
+function login(){
+if(loginCooldown) return;
+loginCooldown=true;
+setTimeout(()=>loginCooldown=false,4000);
+
+const email=document.getElementById('email').value;
+const password=document.getElementById('password').value;
+
+auth.signInWithEmailAndPassword(email,password)
+.then(()=>{
+showToast('✔ Giriş başarılı - Erişim sağlandı');
+
+document.getElementById('adminPanel').style.display='block';
+document.getElementById('loginModal').style.display='none';
+
+const btn=document.getElementById('loginBtn');
+btn.disabled=true;
+btn.innerText='✔ Yetki Aktif';
+
+isLoggedIn=true;
+yukle();
+})
+.catch(err=>showToast('✖ Hata: '+err.message));
+}
+
+function gonder(){
+const realName=document.getElementById('realName').value;
+const discordName=document.getElementById('discordName').value;
+const about=document.getElementById('about').value;
+
+if(!realName||!discordName||!about)return alert('Boş bırakma');
+
+db.collection('basvurular').add({realName,discordName,about,durum:"beklemede",tarih:Date.now()});
+showToast('✔ Başvuru başarıyla gönderildi');
+
+document.getElementById('realName').value='';
+document.getElementById('discordName').value='';
+document.getElementById('about').value='';
+}
+
+function filtre(f){currentFilter=f;yukle();}
+
+function yukle(){
+db.collection('basvurular').orderBy('tarih','desc').onSnapshot(snap=>{
+let html="";
+snap.forEach(doc=>{
+const d=doc.data();
+const id=doc.id;
+if(d.durum!==currentFilter)return;
+
+html+=`<div class='card'><b>${d.realName}</b><br>${d.discordName}<br>${d.about}</div>`;
+
+if(d.durum==='beklemede'){
+html+=`<div class='row'>
+<button class='smallBtn accept' onclick="durumGuncelle('${id}','kabul')">Kabul</button>
+<button class='smallBtn reject' onclick="durumGuncelle('${id}','red')">Red</button>
+<button class='smallBtn delete' onclick="sil('${id}')">Sil</button>
+</div>`;
+}else{
+html+=`<div class='row'><button class='smallBtn delete' onclick="sil('${id}')">Sil</button></div>`;
+}
+});
+document.getElementById('liste').innerHTML=html;
+});
+}
+
+function durumGuncelle(id,durum){db.collection('basvurular').doc(id).update({durum});}
+function sil(id){db.collection('basvurular').doc(id).delete();}
+
+function createRain(){
+const rain=document.getElementById('rain');
+for(let i=0;i<60;i++){
+const d=document.createElement('div');
+d.className='drop';
+d.style.left=Math.random()*100+'%';
+d.style.animationDuration=(0.8+Math.random()*2)+'s';
+rain.appendChild(d);
+}
+}
+createRain();
+</script>
+
+</body>
+</html>
+
